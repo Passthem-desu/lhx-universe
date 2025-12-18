@@ -1,158 +1,220 @@
-/**
- * LLM Chat App Frontend
- *
- * Handles the chat UI interactions and communication with the backend API.
- */
+/* Multi-contact frontend with macOS-like horizontal layout
+   - Left: contacts list
+   - Right: messages + composer
+   - Supports selecting a contact and per-contact message history
+*/
 
-// DOM elements
-const chatMessages = document.getElementById("chat-messages");
-const userInput = document.getElementById("user-input");
-const sendButton = document.getElementById("send-button");
-const typingIndicator = document.getElementById("typing-indicator");
+const contactsEl = document.getElementById('contacts');
+const messagesEl = document.getElementById('messages');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-button');
+const activeNameEl = document.getElementById('active-name');
+const activeStatusEl = document.getElementById('active-status');
+const activeAvatarEl = document.getElementById('active-avatar');
 
-// Chat state
-let chatHistory = [
-	{
-		role: "assistant",
-		content:
-			"Hello! I'm an LLM chat app powered by Cloudflare Workers AI. How can I help you today?",
-	},
-];
 let isProcessing = false;
 
-// Auto-resize textarea as user types
-userInput.addEventListener("input", function () {
-	this.style.height = "auto";
-	this.style.height = this.scrollHeight + "px";
-});
+const contacts = [
+	{id: '1', name: '刘煊溢', status: '我行我素！', avatar: '刘', prompt: '', messages: [
+		{role: 'roommate', content: '我操，不是吧，又吃麦当劳？有钱哥。'}
+	]},
+	/*{id: '2', name: 'Bob', status: '离线', avatar: 'B', prompt: '你是 Bob，偏好详细技术性回复。', messages: [
+		{role: 'assistant', content: 'Bob 在休息，稍后回复。'}
+	]},
+	{id: '3', name: 'Carol', status: '在线', avatar: 'C', prompt: '你是 Carol，语气轻松，常用比喻和例子。', messages: [
+		{role: 'assistant', content: '你好，我是 Carol，有什么可以帮忙的吗？'}
+	]}*/
+];
 
-// Send message on Enter (without Shift)
-userInput.addEventListener("keydown", function (e) {
-	if (e.key === "Enter" && !e.shiftKey) {
-		e.preventDefault();
-		sendMessage();
+let activeContactId = contacts[0].id;
+
+function init(){
+	renderContacts();
+	selectContact(activeContactId);
+
+	userInput.addEventListener('input', () => {
+		userInput.style.height = 'auto';
+		userInput.style.height = Math.min(userInput.scrollHeight, 160) + 'px';
+	});
+
+	userInput.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			sendMessage();
+		}
+	});
+
+	sendButton.addEventListener('click', sendMessage);
+}
+
+function renderContacts(){
+	contactsEl.innerHTML = '';
+	for(const c of contacts){
+		const item = document.createElement('div');
+		item.className = 'contact-item';
+		item.dataset.id = c.id;
+
+		const av = document.createElement('div');
+		av.className = 'avatar';
+		av.textContent = c.avatar;
+
+		const meta = document.createElement('div');
+		meta.className = 'contact-meta';
+		meta.innerHTML = `<div class="name">${escapeHtml(c.name)}</div><div class="status">${escapeHtml(c.status)}</div>`;
+
+		item.appendChild(av);
+		item.appendChild(meta);
+
+		item.addEventListener('click', () => selectContact(c.id));
+
+		contactsEl.appendChild(item);
 	}
-});
+	highlightActiveContact();
+}
 
-// Send button click handler
-sendButton.addEventListener("click", sendMessage);
+function highlightActiveContact(){
+	const items = contactsEl.querySelectorAll('.contact-item');
+	items.forEach(it => {
+		it.classList.toggle('active', it.dataset.id === activeContactId);
+	});
+}
 
-/**
- * Sends a message to the chat API and processes the response
- */
-async function sendMessage() {
-	const message = userInput.value.trim();
+async function selectContact(id){
+	const contact = contacts.find(c => c.id === id);
+	if(!contact) return;
+	activeContactId = id;
+	// try to load markdown prompt file for this contact
+	await loadPromptForContact(contact);
+	activeNameEl.textContent = contact.name;
+	activeStatusEl.textContent = contact.status;
+	if(activeAvatarEl){ activeAvatarEl.textContent = contact.avatar; }
+	renderChatForActiveContact();
+	highlightActiveContact();
+}
 
-	// Don't send empty messages
-	if (message === "" || isProcessing) return;
+async function loadPromptForContact(contact){
+	// attempt to fetch ./prompts/{id}.md in public/; fallback to contact.prompt if missing
+	try{
+		const resp = await fetch(`./prompts/${contact.id}.md`);
+		if(!resp.ok) return; // leave existing prompt
+		const text = await resp.text();
+		// strip leading markdown title if present, but keep full text as prompt
+		contact.prompt = text.trim();
+	}catch(e){
+		// ignore network errors and keep existing contact.prompt
+		console.debug('No prompt file for contact', contact.id, e);
+	}
+}
 
-	// Disable input while processing
+function renderChatForActiveContact(){
+	messagesEl.innerHTML = '';
+	const contact = contacts.find(c => c.id === activeContactId);
+	for(const m of contact.messages){
+		appendBubble(m.role, m.content);
+	}
+}
+
+function appendBubble(role, content, opts={}){
+	const row = document.createElement('div');
+	row.className = 'msg-row ' + (role === 'user' ? 'user' : 'assistant');
+
+	const bubble = document.createElement('div');
+	bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'assistant');
+	bubble.innerHTML = escapeHtml(content);
+
+	row.appendChild(bubble);
+
+	if(opts.meta){
+		const meta = document.createElement('div');
+		meta.className = 'meta';
+		meta.textContent = opts.meta;
+		row.appendChild(meta);
+	}
+
+	messagesEl.appendChild(row);
+	scrollToBottom();
+	return bubble;
+}
+
+function scrollToBottom(){
+	requestAnimationFrame(()=>{
+		messagesEl.scrollTop = messagesEl.scrollHeight;
+	});
+}
+
+async function sendMessage(){
+	const text = userInput.value.trim();
+	if(!text || isProcessing) return;
+
+	const contact = contacts.find(c => c.id === activeContactId);
+	if(!contact) return;
+
+	// add user bubble locally
+	appendBubble('user', text);
+	contact.messages.push({role:'user', content:text});
+
+	// clear input
+	userInput.value = '';
+	userInput.style.height = 'auto';
+
 	isProcessing = true;
-	userInput.disabled = true;
 	sendButton.disabled = true;
 
-	// Add user message to chat
-	addMessageToChat("user", message);
+	const assistantBubble = appendBubble('assistant', '');
 
-	// Clear input
-	userInput.value = "";
-	userInput.style.height = "auto";
+	try{
+		// prepend system prompt for this contact (if provided)
+		const messagesToSend = [];
+		if(contact.prompt){ messagesToSend.push({role: 'system', content: contact.prompt}); }
+		// send the conversation history for context
+		messagesToSend.push(...contact.messages);
 
-	// Show typing indicator
-	typingIndicator.classList.add("visible");
-
-	// Add message to history
-	chatHistory.push({ role: "user", content: message });
-
-	try {
-		// Create new assistant response element
-		const assistantMessageEl = document.createElement("div");
-		assistantMessageEl.className = "message assistant-message";
-		assistantMessageEl.innerHTML = "<p></p>";
-		chatMessages.appendChild(assistantMessageEl);
-
-		// Scroll to bottom
-		chatMessages.scrollTop = chatMessages.scrollHeight;
-
-		// Send request to API
-		const response = await fetch("/api/chat", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				messages: chatHistory,
-			}),
+		const resp = await fetch('/api/chat', {
+			method: 'POST',
+			headers: {'Content-Type':'application/json'},
+			body: JSON.stringify({messages: messagesToSend}),
 		});
 
-		// Handle errors
-		if (!response.ok) {
-			throw new Error("Failed to get response");
+		if(!resp.ok){
+			throw new Error('Network error');
 		}
 
-		// Process streaming response
-		const reader = response.body.getReader();
-		const decoder = new TextDecoder();
-		let responseText = "";
+		const reader = resp.body.getReader();
+		const dec = new TextDecoder();
+		let assistantText = '';
 
-		while (true) {
-			const { done, value } = await reader.read();
-
-			if (done) {
-				break;
-			}
-
-			// Decode chunk
-			const chunk = decoder.decode(value, { stream: true });
-
-			// Process SSE format
-			const lines = chunk.split("\n");
-			for (const line of lines) {
-				try {
-					const jsonData = JSON.parse(line);
-					if (jsonData.response) {
-						// Append new content to existing text
-						responseText += jsonData.response;
-						assistantMessageEl.querySelector("p").textContent = responseText;
-
-						// Scroll to bottom
-						chatMessages.scrollTop = chatMessages.scrollHeight;
-					}
-				} catch (e) {
-					console.error("Error parsing JSON:", e);
+		while(true){
+			const {done, value} = await reader.read();
+			if(done) break;
+			const chunk = dec.decode(value, {stream:true});
+			const parts = chunk.split('\n').filter(Boolean);
+			for(const p of parts){
+				try{
+					const j = JSON.parse(p);
+					if(j.response){ assistantText += j.response; }
+				}catch(e){
+					assistantText += p;
 				}
 			}
+			assistantBubble.innerHTML = escapeHtml(assistantText);
+			scrollToBottom();
 		}
 
-		// Add completed response to chat history
-		chatHistory.push({ role: "assistant", content: responseText });
-	} catch (error) {
-		console.error("Error:", error);
-		addMessageToChat(
-			"assistant",
-			"Sorry, there was an error processing your request.",
-		);
-	} finally {
-		// Hide typing indicator
-		typingIndicator.classList.remove("visible");
-
-		// Re-enable input
+		contact.messages.push({role:'assistant', content: assistantText});
+	}catch(err){
+		console.error(err);
+		assistantBubble.innerHTML = '请求失败，请稍后重试。';
+	}finally{
 		isProcessing = false;
-		userInput.disabled = false;
 		sendButton.disabled = false;
 		userInput.focus();
 	}
 }
 
-/**
- * Helper function to add message to chat
- */
-function addMessageToChat(role, content) {
-	const messageEl = document.createElement("div");
-	messageEl.className = `message ${role}-message`;
-	messageEl.innerHTML = `<p>${content}</p>`;
-	chatMessages.appendChild(messageEl);
-
-	// Scroll to bottom
-	chatMessages.scrollTop = chatMessages.scrollHeight;
+function escapeHtml(str){
+	if(!str) return '';
+	return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
+
+// kick off
+init();

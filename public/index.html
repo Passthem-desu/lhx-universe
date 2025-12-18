@@ -1,177 +1,143 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>LLM Chat App</title>
-		<style>
-			:root {
-				--primary-color: #f6821f;
-				--primary-hover: #e67e22;
-				--light-bg: #f9fafb;
-				--border-color: #e5e7eb;
-				--text-color: #1f2937;
-				--text-light: #6b7280;
-				--user-msg-bg: #fff2e6;
-				--assistant-msg-bg: #f3f4f6;
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>刘浩翔宇宙</title>
+			<style>
+			:root{
+				/* Bolder Bauhaus palette with good contrast */
+				--accent0: #ff3c00;  
+				--accent1: #ff3c00;    
+				--accent2: #ffffff; 
+				--accent3: #0A0A0A;
+				--bg: var(--accent3);             /* 轻微偏暖的背景，衬托色彩 */
+				--panel: #FFFFFF;
+				--bubble-gray: #F1F1F1;
+				--text: #0A0A0A;           /* 强对比主文字颜色 */
+				--muted: #666666;
 			}
+			*{box-sizing:border-box}
+			html,body{height:100%}
+			body{
+				margin:0;
+				font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+				background:var(--bg);
+				color:var(--text);
+				-webkit-font-smoothing:antialiased;
+			}
+			.app{
+				max-width:1100px;
+				height:100vh;
+				margin:20px auto;
+				display:flex;
+				flex-direction:row;
+				background:transparent;
+			}
+			.mac-layout .sidebar{
+				width:280px;background:var(--accent1);backdrop-filter:blur(6px);border-radius:0px;height:calc(100vh - 40px);overflow:hidden;display:flex;flex-direction:column;
+			}
+			.mac-layout .chat-area{flex:1;display:flex;flex-direction:column;background:var(--accent2);height:calc(100vh - 40px);overflow:hidden}
+			.titlebar{font-weight:700;font-size:48px;color:var(--text);border-bottom:1px solid rgb(0, 0, 0);height:64px;margin-bottom:20px;}
+			.titlebar img{height:44px;vertical-align:middle;margin:10px;}
+			.contacts{overflow:auto}
+			.contact-item{display:flex;align-items:center;margin:10px;cursor:pointer;box-shadow: 4px 4px var(--accent3);}
+			.contact-item:hover{background:transparent;border: 1px solid var(--accent2);}
+			.contact-item.active{background:var(--accent2);}
+			.avatar{width:44px;height:44px;margin-right:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:var(--accent3)}
+			.contact-meta{display:flex;flex-direction:column}
+			.contact-meta .name{font-weight:600}
+			.contact-meta .status{font-size:12px;color:var(--accent3)}
+			.header{
+				height:64px;
+				display:flex;
+				align-items:center;
+				padding:0 16px;
+				gap:12px;
+				border-bottom:1px solid rgb(0, 0, 0);
+			
+				margin-bottom: 12px;
+				background:transparent;
+			}
+			.back{
+				width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;margin-right:8px;background:var(--accent3);
+			}
+			.contact{
+				display:flex;flex-direction:column;justify-content:center;
+			}
+			.contact .name{font-weight:600}
+			.contact .status{font-size:12px;color:var(--accent3)}
 
-			* {
-				box-sizing: border-box;
-				margin: 0;
-				padding: 0;
+			.messages-wrap{
+				flex:1;display:flex;flex-direction:column;overflow:hidden;padding:16px 12px;
 			}
+			.messages{
+				flex:1;overflow:auto;display:flex;flex-direction:column;padding-bottom:12px;
+			}
+			.msg-row{display:flex;margin-bottom:10px;align-items:flex-end}
+			.msg-row.assistant{justify-content:flex-start}
+			.msg-row.user{justify-content:flex-end}
 
-			body {
-				font-family:
-					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-					Cantarell, sans-serif;
-				line-height: 1.6;
-				color: var(--text-color);
-				max-width: 800px;
-				margin: 0 auto;
-				padding: 1rem;
+			.bubble{
+				max-width:78%;padding:10px 14px;font-size:15px;line-height:1.3;box-shadow:5px 5px 0 rgba(0,0,0,1);
 			}
+			.bubble.user{background:var(--accent0);color:#fff;}
+			.bubble.assistant{background:var(--panel);color:var(--text);border:1px solid var(--accent0);}
+			.bubble.note{background:linear-gradient(90deg,var(--accent-3),#FFEAA6);color:var(--accent3)}
 
-			header {
-				text-align: center;
-				margin-bottom: 2rem;
-				padding: 1rem 0;
-				border-bottom: 1px solid var(--border-color);
-			}
+			.meta{font-size:11px;color:var(--muted);margin-top:6px;text-align:right}
 
-			h1 {
-				font-size: 1.5rem;
-				color: var(--primary-color);
+			.composer{
+				padding:12px;border-top:1px solid rgb(0, 0, 0);background:var(--accent2);display:flex;gap:8px;align-items:flex-end;
 			}
+			.input{
+				flex:1;background:var(--accent3);color:var(--accent2);resize:none;min-height:100px;max-height:320px;overflow:auto;font-size:20px;
+			}
+			.actions{display:flex;gap:8px}
+			.btn{
+				background:var(--accent0);color:#fff;padding:10px 14px;border:none;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 22px rgba(5,75,255,0.18);min-height:100px;max-height:320px;
+			}
+			.btn:focus{outline:1px solid rgb(0, 0, 0)}
+			.btn:disabled{background: var(--accent3);border: 1px solid var(--accent0);cursor:default}
+			.btn#send-button{font-size:30px;font-weight:1000}
 
-			.chat-container {
-				display: flex;
-				flex-direction: column;
-				height: calc(100vh - 200px);
-				min-height: 400px;
-				border: 1px solid var(--border-color);
-				border-radius: 8px;
-				overflow: hidden;
-			}
-
-			.chat-messages {
-				flex: 1;
-				overflow-y: auto;
-				padding: 1rem;
-				background-color: var(--light-bg);
-			}
-
-			.message {
-				margin-bottom: 1rem;
-				padding: 0.75rem;
-				border-radius: 8px;
-				max-width: 80%;
-			}
-
-			.user-message {
-				background-color: var(--user-msg-bg);
-				align-self: flex-end;
-				margin-left: auto;
-			}
-
-			.assistant-message {
-				background-color: var(--assistant-msg-bg);
-				align-self: flex-start;
-			}
-
-			.message-input {
-				display: flex;
-				padding: 0.75rem;
-				border-top: 1px solid var(--border-color);
-				background-color: white;
-			}
-
-			#user-input {
-				flex: 1;
-				padding: 0.75rem;
-				border: 1px solid var(--border-color);
-				border-radius: 4px;
-				font-family: inherit;
-				resize: none;
-				min-height: 44px;
-			}
-
-			#send-button {
-				margin-left: 0.5rem;
-				padding: 0 1rem;
-				background-color: var(--primary-color);
-				color: white;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-				transition: background-color 0.2s;
-			}
-
-			#send-button:hover {
-				background-color: var(--primary-hover);
-			}
-
-			#send-button:disabled {
-				background-color: var(--text-light);
-				cursor: not-allowed;
-			}
-
-			.typing-indicator {
-				display: none;
-				margin-bottom: 1rem;
-				font-style: italic;
-				color: var(--text-light);
-			}
-
-			.typing-indicator.visible {
-				display: block;
-			}
-
-			footer {
-				margin-top: 1rem;
-				text-align: center;
-				font-size: 0.85rem;
-				color: var(--text-light);
-			}
+			/* small screens spacing */
+			@media(max-width:420px){.app{padding-bottom:env(safe-area-inset-bottom)}}
 		</style>
 	</head>
 	<body>
-		<header>
-			<h1>Cloudflare AI Chat</h1>
-			<p>Powered by Cloudflare Workers AI</p>
-		</header>
-
-		<div class="chat-container">
-			<div id="chat-messages" class="chat-messages">
-				<div class="message assistant-message">
-					<p>
-						Hello! I'm an LLM chat app powered by Cloudflare Workers AI. How can
-						I help you today?
-					</p>
+		<div class="app mac-layout">
+			<aside class="sidebar">
+				<div class="titlebar"><img src="logo.svg" alt="Logo"></div>
+				<div id="contacts" class="contacts">
+					<!-- contact items rendered here -->
 				</div>
-			</div>
+			</aside>
 
-			<div class="typing-indicator" id="typing-indicator">
-				AI is thinking...
-			</div>
+			<main class="chat-area">
+				<header class="header">
+					<!-- Avatar removed; update scripts/styles if needed -->
+				<div class="contact">
+					<div id="active-name" class="name">Assistant</div>
+						<div id="active-status" class="status">在线</div>
+				</div>
+				</header>
 
-			<div class="message-input">
-				<textarea
-					id="user-input"
-					placeholder="Type your message here..."
-					rows="1"
-					autofocus
-				></textarea>
-				<button id="send-button">Send</button>
-			</div>
+				<div class="messages-wrap">
+					<div id="messages" class="messages">
+						<!-- messages inserted here -->
+					</div>
+				</div>
+
+				<div class="composer">
+					<textarea id="user-input" class="input" placeholder="请输入世界与自由。"></textarea>
+					<div class="actions">
+						<button id="send-button" class="btn">></button>
+					</div>
+				</div>
+			</main>
 		</div>
 
-		<footer>
-			<p>Cloudflare Workers AI Chat Template &copy; 2025</p>
-		</footer>
-
-		<!-- Chat app script -->
 		<script src="chat.js"></script>
 	</body>
 </html>
