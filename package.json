@@ -31,6 +31,7 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"test": "vitest"
+		"test": "vitest",
+		"sync:prompts": "node scripts/sync-default-prompts.js"
 	}
 }

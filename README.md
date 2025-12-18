@@ -151,3 +151,7 @@ The UI styling is contained in the `<style>` section of `public/index.html`. You
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
 - [Cloudflare Workers AI Documentation](https://developers.cloudflare.com/workers-ai/)
 - [Workers AI Models](https://developers.cloudflare.com/workers-ai/models/)
+
+## 默认角色 Prompts
+
+请参阅项目根目录的 [DEFAULT_ROLE_PROMPTS.md](DEFAULT_ROLE_PROMPTS.md) ，该文档包含与本仓库 LLM 交互时推荐使用的系统/助理/用户 prompt 模板及示例。
