@@ -15,6 +15,7 @@ const activeAvatarEl = document.getElementById('active-avatar');
 let isProcessing = false;
 
 const contacts = [
+	{ id: 'group', name: '群聊', status: '三人组', avatar: '群', prompt: '', participants: ['1','2','3'], messages: [] },
 	{id: '1', name: '榆木华', status: '企鹅罐头', avatar: '华', prompt: '', messages: [
 		{role: '', content: '我是榆木华'}
 	]},
@@ -95,6 +96,18 @@ async function selectContact(id){
 async function loadPromptForContact(contact){
 	// attempt to fetch ./prompts/{id}.md in public/; fallback to contact.prompt if missing
 	try{
+		// if this is the group contact, load individual prompts for participants
+		if(contact.id === 'group'){
+			for(const pid of contact.participants || []){
+				const p = contacts.find(c=>c.id===pid);
+				if(!p) continue;
+				try{
+					const r = await fetch(`./prompts/${p.id}.md`);
+					if(r.ok){ p.prompt = (await r.text()).trim(); }
+				}catch(e){ console.debug('no prompt', p.id, e); }
+			}
+			return;
+		}
 		const resp = await fetch(`./prompts/${contact.id}.md`);
 		if(!resp.ok) return; // leave existing prompt
 		const text = await resp.text();
@@ -106,11 +119,26 @@ async function loadPromptForContact(contact){
 	}
 }
 
+function parseTalkativenessFromPrompt(text){
+	if(!text) return 0.5;
+	const m = text.match(/活跃度\s*\(talkativeness\)\s*：\s*([0-9.]+)/);
+	if(m) return parseFloat(m[1]);
+	const m2 = text.match(/talkativeness\)[:：]\s*([0-9.]+)/i);
+	if(m2) return parseFloat(m2[1]);
+	return 0.5;
+}
+
 function renderChatForActiveContact(){
 	messagesEl.innerHTML = '';
 	const contact = contacts.find(c => c.id === activeContactId);
 	for(const m of contact.messages){
-		appendBubble(m.role, m.content);
+		if(m.role === 'user'){
+			appendBubble('user', m.content);
+		}else if(m.role && m.role !== 'assistant'){
+			appendBubble('assistant', m.content, {meta: m.role});
+		}else{
+			appendBubble('assistant', m.content);
+		}
 	}
 }
 
@@ -163,11 +191,37 @@ async function sendMessage(){
 	const assistantBubble = appendBubble('assistant', '');
 
 	try{
-		// prepend system prompt for this contact (if provided)
+		// prepare messagesToSend
 		const messagesToSend = [];
-		if(contact.prompt){ messagesToSend.push({role: 'system', content: contact.prompt}); }
-		// send the conversation history for context
-		messagesToSend.push(...contact.messages);
+		if(contact.id === 'group'){
+			// build a combined system prompt that instructs the assistant to roleplay a 3-person group chat
+			const parts = [];
+			let totalActivity = 0;
+			for(const pid of contact.participants || []){
+				const p = contacts.find(c=>c.id===pid);
+				if(!p) continue;
+				parts.push(`Name: ${p.name}\nPrompt:\n${p.prompt || ''}`);
+				totalActivity += parseTalkativenessFromPrompt(p.prompt);
+			}
+			const activityList = (contact.participants || []).map(pid=>{
+				const p = contacts.find(c=>c.id===pid);
+				return p ? `${p.name}:${parseTalkativenessFromPrompt(p.prompt)}` : '';
+			}).filter(Boolean).join(', ');
+			const system = `You are to simulate a short realistic group chat among the following participants. ` +
+				`Each participant should speak with frequency roughly proportional to their "talkativeness" values. ` +
+				`Participants definitions:\n${parts.join('\n\n')}\n\n` +
+				`Talkativeness values: ${activityList}. ` +
+				`When responding, output one or more lines. Each line must begin with the speaker's name followed by a colon and their utterance, e.g. \"榆木华: 我来说一句\". ` +
+				`Choose 1-3 speakers for this response probabilistically; do not include narration. Keep each utterance concise and in-character. `;
+			messagesToSend.push({role:'system', content: system});
+			// include recent group messages for context
+			const groupHistory = contact.messages.slice(-20).map(m=>({role: m.role || 'assistant', content: m.content}));
+			messagesToSend.push(...groupHistory);
+		}else{
+			if(contact.prompt){ messagesToSend.push({role: 'system', content: contact.prompt}); }
+			// send the conversation history for context
+			messagesToSend.push(...contact.messages);
+		}
 
 		const resp = await fetch('/api/chat', {
 			method: 'POST',
@@ -200,7 +254,29 @@ async function sendMessage(){
 			scrollToBottom();
 		}
 
-		contact.messages.push({role:'assistant', content: assistantText});
+			if(contact.id === 'group'){
+				// remove the single assistant streaming bubble to replace with per-speaker bubbles
+				try{ assistantBubble.remove(); }catch(e){}
+			}
+
+				// if group mode, parse assistantText into per-speaker lines
+			if(contact.id === 'group'){
+				const lines = assistantText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+				for(const ln of lines){
+					const m = ln.match(/^([^:：]+)[:：]\s*(.+)$/);
+					if(m){
+						const name = m[1].trim();
+						const content = m[2].trim();
+						contact.messages.push({role: name, content});
+						appendBubble('assistant', content, {meta: name});
+					}else{
+						contact.messages.push({role:'assistant', content: ln});
+						appendBubble('assistant', ln);
+					}
+				}
+			}else{
+				contact.messages.push({role:'assistant', content: assistantText});
+			}
 	}catch(err){
 		console.error(err);
 		assistantBubble.innerHTML = '请求失败，请稍后重试。';
