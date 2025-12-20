@@ -14,6 +14,12 @@ const activeAvatarEl = document.getElementById('active-avatar');
 
 let isProcessing = false;
 let inputLines = [];
+// Configuration: adjust these to control reply timing and grouping behavior
+const GROUP_REPLY_MIN_DELAY = 600;   // ms between sequential replies (min)
+const GROUP_REPLY_MAX_DELAY = 1400;  // ms between sequential replies (max)
+const GROUP_SCHEDULE_MIN_INTERVAL = 5000; // ms, auto-instruction scheduler min
+const GROUP_SCHEDULE_MAX_INTERVAL = 25000; // ms, auto-instruction scheduler max
+const GROUP_GROUP_THRESHOLD_MS = 60000; // ms, messages within this window are grouped
 
 const contacts = [
 	{ id: 'group', name: '群聊', status: '三人组', avatar: '群', prompt: '', participants: ['1','2','3'], messages: [] },
@@ -261,9 +267,8 @@ function displaySequentialReplies(contact, replies){
 	}
 	// schedule each reply sequentially with a small random delay
 	let cumulative = 0;
-	const minDelay = 600; const maxDelay = 1400;
 	replies.forEach((r, idx) => {
-		const d = minDelay + Math.floor(Math.random() * (maxDelay - minDelay));
+		const d = GROUP_REPLY_MIN_DELAY + Math.floor(Math.random() * (GROUP_REPLY_MAX_DELAY - GROUP_REPLY_MIN_DELAY));
 		cumulative += d;
 		setTimeout(()=>{
 			contact.messages.push({role: r.name, content: r.content, ts: Date.now()});
@@ -318,18 +323,20 @@ async function triggerGroupResponse(contact){
 				catch(e){ assistantText += p; }
 			}
 		}
-		// parse lines into speaker utterances
+		// parse lines into speaker utterances, collect replies and display sequentially
 		const lines = assistantText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+		const replies = [];
 		for(const ln of lines){
 			const m = ln.match(/^([^:：]+)[:：]\s*(.+)$/);
 			if(m){
 				const name = m[1].trim(); const content = m[2].trim();
-				contact.messages.push({role: name, content, ts: Date.now()});
-				appendBubble('assistant', content, {meta: name, ts: Date.now(), target: contact.id});
+				replies.push({name, content});
 			}else{
-				contact.messages.push({role:'assistant', content: ln, ts: Date.now()});
-				appendBubble('assistant', ln, {ts: Date.now(), target: contact.id});
+				replies.push({name: 'assistant', content: ln});
 			}
+		}
+		if(replies.length > 0){
+			displaySequentialReplies(contact, replies);
 		}
 	}catch(e){ console.error('group response error', e); }
 }
@@ -340,7 +347,7 @@ function startAutoChat(){
 	if(!inputLines || inputLines.length === 0) return;
 	// recursive scheduler
 	(function scheduleNext(){
-		const interval = 5000 + Math.floor(Math.random()*20000); // 5s - 25s
+		const interval = GROUP_SCHEDULE_MIN_INTERVAL + Math.floor(Math.random() * (GROUP_SCHEDULE_MAX_INTERVAL - GROUP_SCHEDULE_MIN_INTERVAL));
 		setTimeout(()=>{
 			const line = inputLines[Math.floor(Math.random()*inputLines.length)];
 				if(line){
@@ -392,7 +399,7 @@ function renderChatForActiveContact(){
 			current = {startTs: m.ts, msgs: [m]};
 		}else{
 			const last = current.msgs[current.msgs.length-1];
-			if(m.ts - last.ts < 60000){
+			if(m.ts - last.ts < GROUP_GROUP_THRESHOLD_MS){
 				current.msgs.push(m);
 			}else{
 				groups.push(current);
