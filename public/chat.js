@@ -15,14 +15,14 @@ const activeAvatarEl = document.getElementById('active-avatar');
 let isProcessing = false;
 
 const contacts = [
-	{id: '1', name: '郭泡壳', status: '企鹅罐头', avatar: '郭', prompt: '', messages: [
-		{role: 'roommate', content: '我是郭泡壳，爱吃猪。有什么想问我的？'}
+	{id: '1', name: '榆木华', status: '企鹅罐头', avatar: '华', prompt: '', messages: [
+		{role: '', content: '我是榆木华'}
 	]},
-	{id: '2', name: '杨柯', status: '症', avatar: '柯', prompt: '我是杨柯，农村大学旅游管理专业，偏好挑大粪。', messages: [
-		{role: 'poop', content: '我是杨柯，我每天吃2片舍曲林。'}
+	{id: '2', name: 'Snaur', status: '症', avatar: '卵', prompt: '', messages: [
+		{role: '', content: '我是Snaur'}
 	]},
-	{id: '3', name: '任文龙', status: '已读不回', avatar: '任', prompt: '', messages: [
-		{role: 'monitor', content: '我最喜欢已读不回！'}
+	{id: '3', name: 'FFFanwen', status: '已读不回', avatar: '蚊', prompt: '', messages: [
+		{role: '', content: '我是FFFanwen'}
 	]}
 ];
 
