@@ -190,6 +190,61 @@ function simulateIncomingMessage(contact, senderId, text){
 	}
 }
 
+// New: send instruction to model and ask personas to randomly reply according to reply_rate
+async function triggerGroupResponseWithInstruction(contact, instructionText){
+	if(!contact || contact.id !== 'group') return;
+	const parts = [];
+	for(const pid of contact.participants || []){
+		const p = contacts.find(c=>c.id===pid);
+		if(!p) continue;
+		const replyRate = parseReplyRateFromPrompt(p.prompt);
+		const talk = parseTalkativenessFromPrompt(p.prompt);
+		parts.push(`Name: ${p.name}\nReplyRate: ${replyRate}\nTalkativeness: ${talk}\nPrompt:\n${p.prompt || ''}`);
+	}
+
+	const system = `You are simulating a short group chat among the following participants. ` +
+		`Each participant has a ReplyRate (probability of replying when given an instruction) and a Talkativeness value. ` +
+		`When given an instruction, decide for each participant whether they reply probabilistically according to their ReplyRate. ` +
+		`If a participant replies, generate one concise, in-character utterance for them based on their Prompt. ` +
+		`Output only lines in the format: Name: <utterance>. Do not output extra explanation.` +
+		`\n\nParticipants:\n${parts.join('\n\n')}\n\nInstruction: ${instructionText}`;
+
+	const messagesToSend = [{role:'system', content: system}];
+	// include recent history for context
+	const groupHistory = contact.messages.slice(-20).map(m=>({role: m.role || 'assistant', content: m.content}));
+	messagesToSend.push(...groupHistory);
+
+	try{
+		const resp = await fetch('/api/chat', {
+			method: 'POST', headers: {'Content-Type':'application/json'},
+			body: JSON.stringify({messages: messagesToSend}),
+		});
+		if(!resp.ok) return;
+		const reader = resp.body.getReader();
+		const dec = new TextDecoder();
+		let assistantText = '';
+		while(true){
+			const {done, value} = await reader.read();
+			if(done) break;
+			const chunk = dec.decode(value, {stream:true});
+			const parts = chunk.split('\n').filter(Boolean);
+			for(const p of parts){
+				try{ const j = JSON.parse(p); if(j.response) assistantText += j.response; }
+				catch(e){ assistantText += p; }
+			}
+		}
+		const lines = assistantText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+		for(const ln of lines){
+			const m = ln.match(/^([^:：]+)[:：]\s*(.+)$/);
+			if(m){
+				const name = m[1].trim(); const content = m[2].trim();
+				contact.messages.push({role: name, content});
+				appendBubble('assistant', content, {meta: name});
+			}
+		}
+	}catch(e){ console.error('group instruction response error', e); }
+}
+
 async function triggerGroupResponse(contact){
 	if(!contact || contact.id !== 'group') return;
 	const messagesToSend = [];
@@ -257,8 +312,10 @@ function startAutoChat(){
 		const interval = 5000 + Math.floor(Math.random()*20000); // 5s - 25s
 		setTimeout(()=>{
 			const line = inputLines[Math.floor(Math.random()*inputLines.length)];
-			const senderId = pickRandomSender(contact);
-			if(senderId && line){ simulateIncomingMessage(contact, senderId, line); }
+				if(line){
+					// treat the line as an instruction fed to the model; ask personas to randomly reply
+					triggerGroupResponseWithInstruction(contact, line);
+				}
 			scheduleNext();
 		}, interval);
 	})();
