@@ -12,7 +12,7 @@ import { SYSTEM_PROMPT } from "./defaultPrompts";
 
 // Model ID for Workers AI model
 // https://developers.cloudflare.com/workers-ai/models/
-const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const MODEL_ID = "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b";
 
 export default {
 	/**
