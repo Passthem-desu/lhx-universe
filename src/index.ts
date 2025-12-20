@@ -12,8 +12,8 @@ import { SYSTEM_PROMPT } from "./defaultPrompts";
 
 // Model ID for Workers AI model
 // https://developers.cloudflare.com/workers-ai/models/
-const MODEL_ID = "@cf/qwen/qwen3-30b-a3b-fp8";
-
+const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+//@cf/meta/llama-3.3-70b-instruct-fp8-fast
 export default {
 	/**
 	 * Main request handler for the Worker
